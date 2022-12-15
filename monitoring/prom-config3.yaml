@@ -8,6 +8,12 @@ data:
     global:
       scrape_interval: 15s
       scrape_timeout: 15s
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets: ["alertmanager:9093"]
+    rule_files:
+    - /etc/prometheus/rules.yml
     remote_write:    # 写入到远程 VM 存储，url 是远程写入接口地址
     - url: http://vminsert:8480/insert/0/prometheus/
       # queue_config:    # 如果 Prometheus 抓取指标很大，可以加调整 queue，但是会提高内存占用
@@ -24,3 +30,16 @@ data:
         replacement: "${1}"
         target_label: 'ip'
         action: replace
+  rules.yml: |
+    groups:
+    - name: test-node-mem
+      rules:
+      - alert: NodeMemoryUsage
+        expr: (node_memory_MemTotal_bytes - (node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes)) / node_memory_MemTotal_bytes * 100 > 20
+        for: 2m
+        labels:
+          team: node
+        annotations:
+          summary: "{{$labels.instance}}: High Memory usage detected"
+          description: "{{$labels.instance}}: Memory usage is above 20% (current value is: {{ $value }}"
+
