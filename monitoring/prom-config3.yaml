@@ -30,6 +30,31 @@ data:
         replacement: "${1}"
         target_label: 'ip'
         action: replace
+
+    - job_name: node-exporter
+      scrape_interval: 3s
+      honor_labels: true
+      consul_sd_configs:
+      - server: consul:8500
+        services: [lima-rancher-desktop_node-exporter]
+      relabel_configs:
+      - source_labels: [__meta_consul_tags]
+        regex: .*,_app=([^,]+),.*
+        replacement: ${1}
+        target_label: _app
+      - source_labels: [__meta_consul_tags]
+        regex: .*,_service=([^,]+),.*
+        replacement: ${1}
+        target_label: _service
+      - source_labels: [__meta_consul_tags]
+        regex: .*,_hostname=([^,]+),.*
+        replacement: ${1}
+        target_label: _hostname
+      - source_labels: [__meta_consul_tags]
+        regex: .*,_environment=([^,]+),.*
+        replacement: ${1}
+        target_label: _environment
+
   rules.yml: |
     groups:
     - name: test-node-mem

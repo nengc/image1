@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consul-config
+  namespace: monitoring
+data:
+  server.json: |
+    {
+      "bind_addr": "0.0.0.0",
+      "client_addr": "0.0.0.0",
+      "disable_host_node_id": true,
+      "data_dir": "/consul/data",
+      "datacenter": "monitoring",
+      "bootstrap_expect": 1,
+      "server": true,
+      "domain": "cluster.consul",
+      "retry_join": [
+        "provider=k8s namespace=monitoring label_selector=\"app=consul,component=server\""
+      ],
+      "telemetry": {
+        "prometheus_retention_time": "5m"
+      }
+    }
+  ui.json: |
+    {
+      "ui" : true,
+      "client_addr" : "0.0.0.0",
+      "enable_script_checks" : false,
+      "disable_remote_exec" : true
+    }
