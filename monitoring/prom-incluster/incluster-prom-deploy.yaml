@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus-incluster
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus-incluster
+spec:
+  selector:
+    matchLabels:
+      app: prometheus-incluster
+      app.kubernetes.io/name: prometheus-incluster
+      kvass/rep: "0"
+  serviceName: prometheus-incluster
+  template:
+    metadata:
+      labels:
+        app: prometheus-incluster
+        app.kubernetes.io/name: prometheus-incluster
+        kvass/rep: "0"
+    spec:
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data-incluster
+        - name: config-volume
+          configMap:
+            name: prometheus-config-incluster
+            defaultMode: 420
+        - emptyDir: {}
+          name: config-out
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      serviceAccountName: prometheus-incluster
+      containers:
+        - name: kvass
+          args:
+            - sidecar
+            - --prometheus.url=http://localhost:9090
+            - --store.path=/prometheus # where to store kvass local data
+            - --config.file= # origin config file
+            - --config.output-file=/etc/prometheus/config_out/prometheus_injected.yaml # injected config file. this is the file prometheus use
+          image: tkestack/kvass:v0.3.1
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+            # sidecar need pvc to store targets list， see '--store.path" flag
+            # sidecar will reload targets list in initialization phase
+            - mountPath: /prometheus
+              name: data
+          ports:
+            - containerPort: 8080
+              name: web
+              protocol: TCP
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+        - name: prometheus
+          image: prom/prometheus:v2.35.0
+          args:
+            # - "--config.file=/etc/prometheus/prometheus.yaml"
+            - --config.file=/etc/prometheus/config_out/prometheus_injected.yaml # use injected config file instead of origin config file
+            - "--storage.tsdb.path=/prometheus" # 指定tsdb数据路径
+            - "--storage.tsdb.retention.time=2d"
+            - "--web.enable-lifecycle" # 支持热更新，直接执行localhost:9090/-/reload立即生效
+          ports:
+            - containerPort: 9090
+              name: http
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: "/etc/prometheus"
+              name: config-volume
+            - mountPath: "/prometheus"
+              name: data
+            - mountPath: /etc/prometheus/config_out
+              name: config-out
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-incluster
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus-incluster
+spec:
+  selector:
+    app: prometheus-incluster
+    app.kubernetes.io/name: prometheus-incluster
+  type: NodePort
+  ports:
+    - name: web
+      protocol: TCP
+      port: 8080
+      targetPort: web
+
+    - name: web-prom
+      port: 9090
+      targetPort: http
+      nodePort: 30009

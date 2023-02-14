@@ -1,0 +1,132 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: prometheus-config-incluster
+  namespace: monitoring
+data:
+  prometheus.yml: |-
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: custom3
+    remote_write:    # 写入到远程 VM 存储，url 是远程写入接口地址
+    - url: http://vminsert:8480/insert/0/prometheus/
+    scrape_configs:
+    - job_name: 'k8s-cadvisor'
+      # metrics_path: /metrics/cadvisor
+      # kubernetes_sd_configs:
+      # - role: node
+      # relabel_configs:
+      # - source_labels: [__address__]
+      #   regex: '(.*):10250'
+      #   replacement: '${1}:10255'
+      #   target_label: __address__
+      #   action: replace
+      # - action: labelmap
+      #   regex: __meta_kubernetes_node_label_(.+)
+
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __metrics_path__
+        replacement: /metrics/cadvisor
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: true
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+
+      metric_relabel_configs:
+      - source_labels: [instance]
+        separator: ;
+        regex: (.+)
+        target_label: node
+        replacement: $1
+        action: replace
+
+      # - source_labels: [pod_name]
+      #   separator: ;
+      #   regex: (.+)
+      #   target_label: pod
+      #   replacement: $1
+      #   action: replace
+      # - source_labels: [container_name]
+      #   separator: ;
+      #   regex: (.+)
+      #   target_label: container
+      #   replacement: $1
+      #   action: replace
+
+    - job_name: kube-state-metrics
+      kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+          - monitoring
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+        regex: kube-state-metrics
+        replacement: $1
+        action: keep
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: k8s_namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: k8s_sname
+
+
+    - job_name: kubernetes-pods
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: "keep"
+        regex: "true"
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        action: "drop"
+        regex: "calico-node|traefik"
+      # - source_labels: [__meta_kubernetes_pod_container_name]
+      #   action: "drop"
+      #   regex: "traefik"
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: "(.+)"
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+      - source_labels: [__meta_kubernetes_pod_annotation_application_name]
+        action: replace
+        target_label: application
+        
+      metric_relabel_configs:
+      - source_labels: [instance]
+        separator: ;
+        regex: (.+)
+        target_label: ip
+        replacement: $1
+        action: replace
+      - source_labels: [kubernetes_pod_name]
+        separator: ;
+        regex: (.+)
+        target_label: instance
+        replacement: $1
+        action: replace

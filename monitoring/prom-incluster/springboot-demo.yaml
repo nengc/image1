@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: springboot
+  namespace: monitoring
+  labels:
+    app: springboot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: springboot
+      name: springboot
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: '8080'
+        prometheus.io/scrape: 'true'
+        application.name: 'springboot'
+      labels:
+        app: springboot
+        name: springboot
+    spec:
+      containers:
+        - image: springboot-demo
+          name: springboot
+          # imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: springboot
+  namespace: monitoring
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+      nodePort: 30010
+  selector:
+    app: springboot

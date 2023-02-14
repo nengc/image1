@@ -1,0 +1,62 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-incluster
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - configmaps
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources:
+      - persistentvolumeclaims
+    verbs:
+      - delete
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - list
+      - get
+      - patch
+      - update
+  - apiGroups: ["", "networking.k8s.io", "extensions"]
+    resources:
+      - nodes
+      - nodes/proxy
+      - services
+      - endpoints
+      - pods
+      - configmaps
+      - secrets
+      - nodes/metrics
+      - endpointslices
+      - app
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/resources"]
+    verbs: ["get"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-incluster
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-incluster
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-incluster
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-incluster
+    namespace: monitoring
+---

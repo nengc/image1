@@ -1,0 +1,93 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: prometheus-config-incluster
+  namespace: monitoring
+data:
+  prometheus.yml: |-
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: custom3
+    remote_write:    # 写入到远程 VM 存储，url 是远程写入接口地址
+    - url: http://vminsert:8480/insert/0/prometheus/
+      # queue_config:    # 如果 Prometheus 抓取指标很大，可以加调整 queue，但是会提高内存占用
+      #   max_samples_per_send: 10000  # 每次发送的最大样本数
+      #   capacity: 20000
+      #   max_shards: 30   # 最大分片数，即并发量。
+    scrape_configs:
+    - job_name: cadvisor
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: true
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - replacement: /metrics/cadvisor
+        target_label: __metrics_path__
+
+    - job_name: endpoints
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - action: drop
+        regex: true
+        source_labels:
+        - __meta_kubernetes_pod_container_init
+      # - action: keep_if_equal
+      #   source_labels:
+      #   - __meta_kubernetes_service_annotation_prometheus_io_port
+      #   - __meta_kubernetes_pod_container_port_number
+      - action: keep
+        regex: .*,__meta_kubernetes_service_annotation_prometheus_io_port=([^,]+),.*
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_port
+      - action: keep
+        regex: .*,__meta_kubernetes_pod_container_port_number=([^,]+),.*
+        source_labels:
+        - __meta_kubernetes_pod_container_port_number
+      - action: keep
+        regex: true
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scrape
+      - action: replace
+        regex: (https?)
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scheme
+        target_label: __scheme__
+      - action: replace
+        regex: (.+)
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_path
+        target_label: __metrics_path__
+      - action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        source_labels:
+        - __address__
+        - __meta_kubernetes_service_annotation_prometheus_io_port
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels:
+        - __meta_kubernetes_pod_name
+        target_label: pod
+      - source_labels:
+        - __meta_kubernetes_namespace
+        target_label: namespace
+      - source_labels:
+        - __meta_kubernetes_service_name
+        target_label: service
+      - replacement: ${1}
+        source_labels:
+        - __meta_kubernetes_service_name
+        target_label: job
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_pod_node_name
+        target_label: node
