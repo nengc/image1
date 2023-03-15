@@ -1,0 +1,27 @@
+public class HttpTest {
+
+    @Test
+    public void testHttp() throws Exception {
+        HttpURLConnection connection = mock(HttpURLConnection.class);
+
+        when(connection.getResponseCode()).thenReturn(200);
+
+        when(connection.getInputStream()).thenReturn(new ByteArrayInputStream("Hello World".getBytes()));
+
+        URL url = new URL("http://example.com");
+
+        URLConnection urlConnection = mock(URLConnection.class);
+
+        when(url.openConnection()).thenReturn(urlConnection);
+
+        when(urlConnection.connect()).thenReturn(null);
+
+        when(urlConnection.getInputStream()).thenReturn(connection.getInputStream());
+
+        Scanner scanner = new Scanner(url.openStream());
+
+        String responseBody = scanner.useDelimiter("\\A").next();
+
+        Assertions.assertEquals("Hello World", responseBody);
+    }
+}
